@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Fast security pre-commit — runs on EVERY commit in every worktree (core.hooksPath).
+# Deep gates stay in gates.sh; this stops bad commits at the source in seconds.
+set -uo pipefail
+FAIL=0
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1. Block committed env/secret files outright
+echo "$STAGED" | grep -E '(^|/)\.env(\..*)?$|\.(pem|key|pfx|p12)$' | grep -v '\.example$' && {
+  echo "BLOCKED: env/key file staged for commit"; FAIL=1; }
+
+# 1b. Locked test skeletons are immutable (test-first contract)
+if [ -f .locked-tests ]; then
+  LOCKED_HITS=$(grep -Fxf .locked-tests <(echo "$STAGED") || true)
+  if [ -n "$LOCKED_HITS" ] && [ "${ALLOW_TEST_AUTHOR_COMMIT:-}" != "1" ]; then
+    echo "BLOCKED: locked test file(s) staged: $LOCKED_HITS"
+    echo "Tests define the spec. If a test is wrong, raise it in Questions for Orchestrator."
+    FAIL=1
+  fi
+fi
+
+# 2. Secrets scan on staged changes only
+if command -v gitleaks >/dev/null; then
+  gitleaks protect --staged --no-banner || FAIL=1
+else
+  echo "BLOCKED: gitleaks not installed (fail-closed)"; FAIL=1
+fi
+
+# 3. Diff-aware SAST on staged files with the curated ruleset
+if command -v semgrep >/dev/null; then
+  CODE_FILES=$(echo "$STAGED" | grep -E '\.(ts|tsx|js|jsx|py|cs|sql)$' || true)
+  if [ -n "$CODE_FILES" ]; then
+    semgrep --config p/owasp-top-ten --config p/secrets --error --quiet $CODE_FILES || FAIL=1
+  fi
+else
+  echo "BLOCKED: semgrep not installed (fail-closed)"; FAIL=1
+fi
+
+[ "$FAIL" -eq 0 ] && exit 0
+echo; echo "Pre-commit security gate failed. Fix findings — do not bypass with --no-verify."
+exit 1

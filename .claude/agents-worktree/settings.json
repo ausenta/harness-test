@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git commit* --no-verify*)",
+      "Bash(git push origin main*)",
+      "Bash(git push --force*)",
+      "Bash(git merge*)",
+      "Bash(git checkout main*)",
+      "Bash(git switch main*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | grep -qE 'push.*(main|master)|merge' && echo 'BLOCKED: agents may not push/merge main. Hand off via work-items/review/.' >&2 && exit 2 || exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

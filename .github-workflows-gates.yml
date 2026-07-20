@@ -1,0 +1,36 @@
+# Install at .github/workflows/gates.yml — CI mirror of scripts/gates.sh.
+# Every agent PR gets a build record in GitHub Checks; branch protection on main
+# should require this check + 1 human approval (the board).
+name: gates
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install gate tooling
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | sh -s -- -b /usr/local/bin || sudo snap install gitleaks || true
+          pipx install semgrep checkov || pip install semgrep checkov
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+      - name: Locked-test integrity (fail if agent modified test skeletons)
+        run: |
+          if [ -f .locked-tests ]; then
+            CHANGED=$(git diff --name-only origin/main...HEAD)
+            VIOLATIONS=$(grep -Fxf .locked-tests <(echo "$CHANGED") || true)
+            # allow the single test-author commit; violations = later modifications
+            if [ -n "$VIOLATIONS" ]; then
+              for f in $VIOLATIONS; do
+                N=$(git log --oneline origin/main...HEAD -- "$f" | wc -l)
+                [ "$N" -gt 1 ] && { echo "LOCKED TEST MODIFIED: $f"; exit 1; }
+              done
+            fi
+          fi
+      - run: npm ci
+      - name: Gates
+        run: bash scripts/gates.sh
