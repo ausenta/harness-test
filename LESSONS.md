@@ -6,4 +6,4 @@ Format: one line each — SYMPTOM → RULE.
 
 ## Lessons
 <!-- example: Agents hardcode SLA day-counts instead of reading config → breakdown must cite the config key, test-author asserts against it -->
-- (none yet — first wave pending)
+- Agent COMMITS an out-of-surface fix (e.g. hardened CI-YAML) to make its own gates pass → sync it read-only into the worktree (working-tree change, NOT a commit); raise the fix in Questions for Orchestrator; the board rebase carries the main-side fix. An agent must never commit to files that scored it green (WI-000: accepted once only because byte-identity to main was independently verified).

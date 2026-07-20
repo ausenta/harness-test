@@ -1,0 +1,1 @@
+2026-07-20T16:44Z | WI-000 "Health endpoint returning app version" | tier=trivial | chair=CONCUR-WITH-CONDITIONS | ruling=APPROVE (byron.bricker) | merge=b4b574c (PR#2 squash, issue#1 closed) | conditions met: rebased+re-verified green, queue reconciled, LESSONS+contract updated | ADR-0001 | no dissent-override
