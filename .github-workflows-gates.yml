@@ -1,6 +1,7 @@
 # Install at .github/workflows/gates.yml — CI mirror of scripts/gates.sh.
-# Every agent PR gets a build record in GitHub Checks; branch protection on main
-# should require this check + 1 human approval (the board).
+# Supply-chain hardened: actions pinned to full commit SHAs, tool installs at
+# pinned versions via release-asset download (no curl|sh), pip tools version-pinned.
+# When bumping: update the SHA/version pairs together (git ls-remote <repo> refs/tags/<tag>).
 name: gates
 on:
   pull_request:
@@ -9,21 +10,26 @@ jobs:
   gates:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: { fetch-depth: 0 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 20 }
-      - name: Install gate tooling
+      - name: Install gate tooling (pinned versions, verified paths)
         run: |
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | sh -s -- -b /usr/local/bin || sudo snap install gitleaks || true
-          pipx install semgrep checkov || pip install semgrep checkov
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+          set -euo pipefail
+          GITLEAKS_V=8.9.0
+          TRIVY_V=0.72.0
+          curl -sSfL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_V}/gitleaks_${GITLEAKS_V}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks && sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          curl -sSfL -o /tmp/trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_V}/trivy_${TRIVY_V}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/trivy.tgz -C /tmp trivy && sudo install /tmp/trivy /usr/local/bin/trivy
+          pipx install "semgrep==1.170.0"
+          pipx install "checkov==3.3.8"
       - name: Locked-test integrity (fail if agent modified test skeletons)
         run: |
           if [ -f .locked-tests ]; then
             CHANGED=$(git diff --name-only origin/main...HEAD)
             VIOLATIONS=$(grep -Fxf .locked-tests <(echo "$CHANGED") || true)
-            # allow the single test-author commit; violations = later modifications
             if [ -n "$VIOLATIONS" ]; then
               for f in $VIOLATIONS; do
                 N=$(git log --oneline origin/main...HEAD -- "$f" | wc -l)
